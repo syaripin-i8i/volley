@@ -7,7 +7,6 @@ venv/
 .env
 
 # SDE data (large binary, downloaded at runtime)
-engine/data/
 *.sqlite
 *.sqlite.bz2
 

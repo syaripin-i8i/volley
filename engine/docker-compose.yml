@@ -2,17 +2,14 @@ services:
   volley-engine:
     build: .
     restart: unless-stopped
-    ports:
-      - "8721:8000"   # デバッグ用（ホストから直アクセス）。本番では外してもよい
     environment:
-      - SDE_PATH=/data/sde.db
-    volumes:
-      - volley-sde:/data
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_DATABASE=seat
+      - DB_USERNAME=seat
+      - DB_PASSWORD=${DB_PASSWORD}
     networks:
       - seat-internal   # SeAT 内部ネットワーク（seat-web から http://volley-engine:8000 で到達可能）
-
-volumes:
-  volley-sde:
 
 networks:
   seat-internal:

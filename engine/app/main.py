@@ -18,9 +18,8 @@ async def health() -> dict[str, str]:
 
 @app.on_event("startup")
 def startup() -> None:
-    sde_ready = sde.ensure_sde_available(auto_download=True)
-    if not sde_ready:
-        logger.warning("SDE was not found and auto-download failed. SDE endpoints may not work.")
+    if not sde.ensure_sde_available():
+        logger.warning("MariaDB connection failed. SDE endpoints may not work.")
         return
     weapon_groups = sde.preload_weapon_groups()
-    logger.info("SDE ready (weapon groups preloaded: %s)", len(weapon_groups))
+    logger.info("MariaDB ready (weapon groups preloaded: %s)", len(weapon_groups))
