@@ -4,40 +4,40 @@ declare(strict_types=1);
 
 namespace Volley\SeatVolley;
 
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\ServiceProvider;
+use Seat\Services\AbstractSeatPlugin;
 
-class VolleyServiceProvider extends ServiceProvider
+class VolleyServiceProvider extends AbstractSeatPlugin
 {
     public function boot(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/Config/volley.php', 'volley');
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'volley');
-
-        $this->registerSidebarMenu();
     }
 
-    private function registerSidebarMenu(): void
+    public function register(): void
     {
-        // Best-effort integration with SeAT sidebar event API.
-        if (! class_exists(\Seat\Web\Events\SidebarBuilding::class)) {
-            return;
-        }
+        $this->mergeConfigFrom(__DIR__ . '/Config/volley.php', 'volley');
+        $this->mergeConfigFrom(__DIR__ . '/Config/volley.sidebar.php', 'package.sidebar');
+        $this->registerPermissions(__DIR__ . '/Config/Permissions/volley.permissions.php', 'volley');
+    }
 
-        Event::listen(\Seat\Web\Events\SidebarBuilding::class, function ($event): void {
-            if (! method_exists($event, 'add')) {
-                return;
-            }
+    public function getName(): string
+    {
+        return 'Volley';
+    }
 
-            $event->add([
-                'name' => 'Damage Calc',
-                'icon' => 'fa fa-crosshairs',
-                'permission' => 'web',
-                'route' => 'volley.index',
-                'params' => ['character_id' => request()->route('character_id')],
-                'parent' => 'character',
-            ]);
-        });
+    public function getPackageRepositoryUrl(): string
+    {
+        return 'https://github.com/syaripin-i8i/seat-volley';
+    }
+
+    public function getPackagistPackageName(): string
+    {
+        return 'seat-volley';
+    }
+
+    public function getPackagistVendorName(): string
+    {
+        return 'syaripin-i8i';
     }
 }

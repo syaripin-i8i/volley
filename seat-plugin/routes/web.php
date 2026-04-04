@@ -6,8 +6,6 @@ use Volley\SeatVolley\Http\Controllers\VolleyController;
 Route::middleware(['web', 'auth'])
     ->prefix('volley')
     ->group(function () {
-        Route::get('/character/{character_id}', [VolleyController::class, 'index'])
-             ->name('volley.index');
-        Route::post('/calculate', [VolleyController::class, 'calculate'])
-             ->name('volley.calculate');
+        Route::get('/', [VolleyController::class, 'index'])->name('volley.index');
+        Route::post('/calculate', [VolleyController::class, 'calculate'])->name('volley.calculate');
     });

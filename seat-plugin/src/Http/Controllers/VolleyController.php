@@ -13,23 +13,23 @@ use Illuminate\View\View;
 
 class VolleyController extends Controller
 {
-    public function index(int $character_id): View
+    public function index(Request $request): View
     {
-        $skills = $this->fetchCharacterSkills($character_id)
-            ->map(function ($skill): array {
-                $typeId = (int) ($skill->skill_id ?? $skill->type_id ?? 0);
-                $level = (int) ($skill->trained_skill_level ?? $skill->active_skill_level ?? $skill->level ?? 0);
+        $characterId = $request->query('character_id');
+        $skills = collect();
 
-                return [
-                    'type_id' => $typeId,
-                    'level' => max(0, min(5, $level)),
-                ];
-            })
-            ->filter(fn (array $skill): bool => $skill['type_id'] > 0)
-            ->values();
+        if ($characterId) {
+            $skills = $this->fetchCharacterSkills((int) $characterId)
+                ->map(fn ($skill): array => [
+                    'type_id' => (int) ($skill->skill_id ?? $skill->type_id ?? 0),
+                    'level' => max(0, min(5, (int) ($skill->trained_skill_level ?? $skill->active_skill_level ?? 0))),
+                ])
+                ->filter(fn (array $skill): bool => $skill['type_id'] > 0)
+                ->values();
+        }
 
         return view('volley::volley.index', [
-            'character_id' => $character_id,
+            'character_id' => $characterId,
             'skills' => $skills,
         ]);
     }
