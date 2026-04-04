@@ -126,6 +126,23 @@
         margin-top: 14px;
     }
 
+    .volley-chart-frame {
+        position: relative;
+        height: 300px;
+        min-height: 300px;
+        max-height: 300px;
+        overflow: hidden;
+        contain: layout size;
+    }
+
+    .volley-chart-canvas {
+        box-sizing: border-box !important;
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+
     .volley-summary {
         margin-top: 14px;
         display: grid;
@@ -227,8 +244,8 @@
 
     <div class="volley-panel volley-chart-panel">
         <h4>DPS vs Distance</h4>
-        <div style="position: relative; height: 300px;">
-            <canvas id="dps-chart"></canvas>
+        <div id="dps-chart-frame" class="volley-chart-frame">
+            <canvas id="dps-chart" class="volley-chart-canvas"></canvas>
         </div>
     </div>
 
@@ -263,6 +280,10 @@
 </script>
 <script>
     (function () {
+        if (window.volleyChartRuntime && typeof window.volleyChartRuntime.teardown === 'function') {
+            window.volleyChartRuntime.teardown();
+        }
+
         const csrfToken = window.volleyCsrfToken;
         const targetPreset = document.getElementById('target-preset');
         const savedFitting = document.getElementById('saved-fitting');
@@ -270,6 +291,11 @@
         const calculateBtn = document.getElementById('calculate-btn');
         const statusText = document.getElementById('status-text');
         const errorText = document.getElementById('error-text');
+        const chartFrame = document.getElementById('dps-chart-frame');
+        const chartCanvas = document.getElementById('dps-chart');
+        const chartCtx = chartCanvas.getContext('2d');
+        const chartHeight = 300;
+        let resizeFrameHandle = null;
 
         const presets = {
             capsule: { sig: 30, speed: 0 },
@@ -350,10 +376,32 @@ Small Projectile Collision Accelerator II
                 ctx.restore();
             }
         };
+        try {
+            Chart.unregister(markerPlugin);
+        } catch (err) {
+            // Ignore unregister errors when the plugin was not registered yet.
+        }
         Chart.register(markerPlugin);
 
-        const chartCtx = document.getElementById('dps-chart').getContext('2d');
         let dpsChart = null;
+
+        function getChartWidth() {
+            const measured = chartFrame.clientWidth || chartFrame.getBoundingClientRect().width || 0;
+            return Math.max(Math.floor(measured), 320);
+        }
+
+        function syncChartFrameSize() {
+            chartFrame.style.height = chartHeight + 'px';
+            chartFrame.style.minHeight = chartHeight + 'px';
+            chartFrame.style.maxHeight = chartHeight + 'px';
+            chartCanvas.style.height = chartHeight + 'px';
+        }
+
+        function resizeChartToFrame() {
+            if (!dpsChart) return;
+            syncChartFrameSize();
+            dpsChart.resize(getChartWidth(), chartHeight);
+        }
 
         function renderGraph(data) {
             const distances = data.distances || [];
@@ -374,6 +422,7 @@ Small Projectile Collision Accelerator II
                 dpsChart.destroy();
             }
 
+            syncChartFrameSize();
             dpsChart = new Chart(chartCtx, {
                 type: 'line',
                 data: {
@@ -400,7 +449,8 @@ Small Projectile Collision Accelerator II
                     ]
                 },
                 options: {
-                    responsive: true,
+                    animation: false,
+                    responsive: false,
                     maintainAspectRatio: false,
                     scales: {
                         x: {
@@ -417,6 +467,7 @@ Small Projectile Collision Accelerator II
                     }
                 }
             });
+            resizeChartToFrame();
         }
 
         function renderSummary(data) {
@@ -479,8 +530,43 @@ Small Projectile Collision Accelerator II
         targetPreset.addEventListener('change', applyPreset);
         savedFitting.addEventListener('change', applyFittingTemplate);
         calculateBtn.addEventListener('click', calculate);
+
+        const onWindowResize = () => {
+            if (resizeFrameHandle !== null) {
+                cancelAnimationFrame(resizeFrameHandle);
+            }
+            resizeFrameHandle = requestAnimationFrame(() => {
+                resizeFrameHandle = null;
+                resizeChartToFrame();
+            });
+        };
+
+        let frameResizeObserver = null;
+        if (typeof ResizeObserver !== 'undefined') {
+            frameResizeObserver = new ResizeObserver(onWindowResize);
+            frameResizeObserver.observe(chartFrame);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        window.volleyChartRuntime = {
+            teardown() {
+                window.removeEventListener('resize', onWindowResize);
+                if (frameResizeObserver) {
+                    frameResizeObserver.disconnect();
+                }
+                if (resizeFrameHandle !== null) {
+                    cancelAnimationFrame(resizeFrameHandle);
+                }
+                if (dpsChart) {
+                    dpsChart.destroy();
+                    dpsChart = null;
+                }
+            }
+        };
+
+        syncChartFrameSize();
         applyPreset();
         applyFittingTemplate();
     })();
 </script>
-
