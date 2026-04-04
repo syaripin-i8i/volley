@@ -3,18 +3,18 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8721:8000"   # ホスト側ポート 8721 でアクセス可能（SeAT 内部からは http://volley-engine:8000）
+      - "8721:8000"   # デバッグ用（ホストから直アクセス）。本番では外してもよい
     environment:
       - SDE_PATH=/data/sde.db
     volumes:
       - volley-sde:/data
-    # SeAT の Docker ネットワークに接続する場合は以下のコメントを外す
-    # networks:
-    #   - seat_default   # ← SeAT の実際のネットワーク名に合わせる
+    networks:
+      - seat-internal   # SeAT 内部ネットワーク（seat-web から http://volley-engine:8000 で到達可能）
 
 volumes:
   volley-sde:
 
-# networks:
-#   seat_default:
-#     external: true
+networks:
+  seat-internal:
+    external: true
+    name: seat-docker_seat-internal
