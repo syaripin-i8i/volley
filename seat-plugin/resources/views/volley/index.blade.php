@@ -1,0 +1,483 @@
+@php
+    $skillsJson = json_encode($skills ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+    $csrfToken = csrf_token();
+@endphp
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap');
+
+    :root {
+        --volley-bg-a: #f4f8ff;
+        --volley-bg-b: #eef6f2;
+        --volley-panel: #ffffff;
+        --volley-border: #d2deef;
+        --volley-text: #1a2433;
+        --volley-muted: #5c6880;
+        --volley-accent: #0f7c5f;
+        --volley-accent-2: #0f4d8c;
+        --volley-warning: #a85c00;
+    }
+
+    .volley-shell {
+        font-family: "IBM Plex Sans JP", sans-serif;
+        color: var(--volley-text);
+        border: 1px solid var(--volley-border);
+        border-radius: 14px;
+        background:
+            radial-gradient(circle at 95% 0%, rgba(15, 124, 95, 0.12), transparent 45%),
+            linear-gradient(130deg, var(--volley-bg-a), var(--volley-bg-b));
+        padding: 18px;
+        box-shadow: 0 14px 28px rgba(15, 77, 140, 0.08);
+    }
+
+    .volley-title {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 26px;
+        margin: 0;
+    }
+
+    .volley-subtitle {
+        color: var(--volley-muted);
+        margin: 4px 0 16px;
+    }
+
+    .volley-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+
+    .volley-panel {
+        background: var(--volley-panel);
+        border: 1px solid var(--volley-border);
+        border-radius: 12px;
+        padding: 14px;
+    }
+
+    .volley-panel h4 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+    }
+
+    .volley-label {
+        display: block;
+        font-size: 12px;
+        color: var(--volley-muted);
+        margin-bottom: 4px;
+        margin-top: 8px;
+    }
+
+    .volley-input,
+    .volley-select,
+    .volley-textarea {
+        width: 100%;
+        border: 1px solid #b4c5dd;
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: #fff;
+        color: var(--volley-text);
+    }
+
+    .volley-textarea {
+        min-height: 250px;
+        resize: vertical;
+        font-family: Consolas, "Courier New", monospace;
+        line-height: 1.35;
+    }
+
+    .volley-target-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .volley-actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .volley-btn {
+        border: none;
+        border-radius: 9px;
+        padding: 10px 14px;
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, var(--volley-accent-2), var(--volley-accent));
+        cursor: pointer;
+    }
+
+    .volley-btn:disabled {
+        opacity: 0.6;
+        cursor: wait;
+    }
+
+    .volley-error {
+        margin-top: 8px;
+        color: #9d1919;
+        font-size: 12px;
+    }
+
+    .volley-chart-panel {
+        margin-top: 14px;
+    }
+
+    .volley-summary {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .volley-kpi {
+        background: #fff;
+        border: 1px solid var(--volley-border);
+        border-radius: 10px;
+        padding: 10px;
+    }
+
+    .volley-kpi .k-label {
+        color: var(--volley-muted);
+        font-size: 12px;
+    }
+
+    .volley-kpi .k-value {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+
+    .volley-hint {
+        color: var(--volley-warning);
+        font-size: 12px;
+        margin-top: 6px;
+    }
+
+    @media (max-width: 900px) {
+        .volley-grid {
+            grid-template-columns: 1fr;
+        }
+        .volley-target-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="volley-shell">
+    <h3 class="volley-title">Character {{ $character_id }} Damage Calculator</h3>
+    <p class="volley-subtitle">EFT フィットとターゲット条件を入力して、距離ごとの適用DPSを可視化します。</p>
+
+    <div class="volley-grid">
+        <div class="volley-panel">
+            <h4>フィット入力</h4>
+            <label class="volley-label" for="saved-fitting">Saved Fittings</label>
+            <select id="saved-fitting" class="volley-select">
+                <option value="">Custom</option>
+                <option value="sample-rifter">Rifter PvP (Sample)</option>
+            </select>
+
+            <label class="volley-label" for="eft-input">EFT テキスト</label>
+            <textarea id="eft-input" class="volley-textarea" placeholder="[Rifter, My PvP Rifter]&#10;&#10;150mm Light AutoCannon II, Republic Fleet EMP S&#10;..."></textarea>
+        </div>
+
+        <div class="volley-panel">
+            <h4>ターゲット設定</h4>
+            <label class="volley-label" for="target-preset">プリセット</label>
+            <select id="target-preset" class="volley-select">
+                <option value="">Custom</option>
+                <option value="capsule">Capsule</option>
+                <option value="frigate" selected>Frigate</option>
+                <option value="destroyer">Destroyer</option>
+                <option value="cruiser">Cruiser</option>
+                <option value="battlecruiser">Battlecruiser</option>
+                <option value="battleship">Battleship</option>
+            </select>
+
+            <div class="volley-target-grid">
+                <div>
+                    <label class="volley-label" for="sig">Sig Radius (m)</label>
+                    <input id="sig" class="volley-input" type="number" value="40" min="1" step="1">
+                </div>
+                <div>
+                    <label class="volley-label" for="speed">Speed (m/s)</label>
+                    <input id="speed" class="volley-input" type="number" value="350" min="0" step="1">
+                </div>
+                <div>
+                    <label class="volley-label" for="angle">Angle (°)</label>
+                    <input id="angle" class="volley-input" type="number" value="90" min="0" max="180" step="1">
+                </div>
+                <div>
+                    <label class="volley-label" for="distance">Distance (km)</label>
+                    <input id="distance" class="volley-input" type="number" value="8" min="0" step="0.1">
+                </div>
+            </div>
+
+            <div class="volley-actions">
+                <button id="calculate-btn" class="volley-btn" type="button">Calculate</button>
+                <span id="status-text" class="volley-hint"></span>
+            </div>
+            <div id="error-text" class="volley-error"></div>
+        </div>
+    </div>
+
+    <div class="volley-panel volley-chart-panel">
+        <h4>DPS vs Distance</h4>
+        <canvas id="dps-chart" height="130"></canvas>
+    </div>
+
+    <div class="volley-summary">
+        <div class="volley-kpi">
+            <div class="k-label">Raw DPS</div>
+            <div class="k-value" id="kpi-raw">-</div>
+        </div>
+        <div class="volley-kpi">
+            <div class="k-label">Applied DPS</div>
+            <div class="k-value" id="kpi-applied">-</div>
+        </div>
+        <div class="volley-kpi">
+            <div class="k-label">Application</div>
+            <div class="k-value" id="kpi-app">-</div>
+        </div>
+        <div class="volley-kpi">
+            <div class="k-label">Volley</div>
+            <div class="k-value" id="kpi-volley">-</div>
+        </div>
+        <div class="volley-kpi">
+            <div class="k-label">Weapon</div>
+            <div class="k-value" id="kpi-weapon">-</div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+    window.characterSkills = {!! $skillsJson !!};
+    window.volleyCsrfToken = "{{ $csrfToken }}";
+</script>
+<script>
+    (function () {
+        const csrfToken = window.volleyCsrfToken;
+        const targetPreset = document.getElementById('target-preset');
+        const savedFitting = document.getElementById('saved-fitting');
+        const eftInput = document.getElementById('eft-input');
+        const calculateBtn = document.getElementById('calculate-btn');
+        const statusText = document.getElementById('status-text');
+        const errorText = document.getElementById('error-text');
+
+        const presets = {
+            capsule: { sig: 30, speed: 0 },
+            frigate: { sig: 40, speed: 350 },
+            destroyer: { sig: 70, speed: 250 },
+            cruiser: { sig: 130, speed: 200 },
+            battlecruiser: { sig: 270, speed: 150 },
+            battleship: { sig: 400, speed: 100 },
+        };
+
+        const sampleFittings = {
+            'sample-rifter': `[Rifter, My PvP Rifter]
+
+150mm Light AutoCannon II, Republic Fleet EMP S
+150mm Light AutoCannon II, Republic Fleet EMP S
+150mm Light AutoCannon II, Republic Fleet EMP S
+[Empty High slot]
+
+1MN Afterburner II
+J5b Enduring Warp Scrambler
+Small Electrochemical Capacitor Booster I, Navy Cap Booster 200
+
+Gyrostabilizer II
+Nanofiber Internal Structure II
+Small Armor Repairer II
+
+Small Projectile Burst Aerator II
+Small Projectile Collision Accelerator II
+[Empty Rig slot]`
+        };
+
+        function applyPreset() {
+            const key = targetPreset.value;
+            if (!key || !presets[key]) return;
+            document.getElementById('sig').value = presets[key].sig;
+            document.getElementById('speed').value = presets[key].speed;
+        }
+
+        function applyFittingTemplate() {
+            const key = savedFitting.value;
+            if (!key || !sampleFittings[key]) return;
+            eftInput.value = sampleFittings[key];
+        }
+
+        function formatNum(value, digits = 2) {
+            if (value === null || value === undefined || Number.isNaN(value)) return '-';
+            return Number(value).toFixed(digits);
+        }
+
+        const markerPlugin = {
+            id: 'rangeMarkers',
+            afterDraw(chart, args, options) {
+                const markers = options.markers || [];
+                const x = chart.scales.x;
+                const y = chart.scales.y;
+                if (!x || !y) return;
+
+                const ctx = chart.ctx;
+                ctx.save();
+                markers.forEach((marker) => {
+                    if (marker.value === null || marker.value === undefined) return;
+                    const px = x.getPixelForValue(marker.value);
+                    if (!Number.isFinite(px)) return;
+
+                    ctx.strokeStyle = marker.color;
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([6, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(px, y.top);
+                    ctx.lineTo(px, y.bottom);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = marker.color;
+                    ctx.font = '11px "IBM Plex Sans JP", sans-serif';
+                    ctx.fillText(marker.label, px + 4, y.top + 12);
+                });
+                ctx.restore();
+            }
+        };
+        Chart.register(markerPlugin);
+
+        const chartCtx = document.getElementById('dps-chart').getContext('2d');
+        let dpsChart = null;
+
+        function renderGraph(data) {
+            const distances = data.distances || [];
+            const applied = data.applied_dps || [];
+            const rawValue = (data.summary && data.summary.raw_dps) || data.raw_dps || 0;
+            const rawLine = distances.map(() => rawValue);
+
+            const markers = [];
+            if (data.optimal_km !== null && data.optimal_km !== undefined) {
+                markers.push({ value: data.optimal_km, color: '#177a56', label: 'optimal' });
+            }
+            if (data.falloff_km !== null && data.falloff_km !== undefined) {
+                const baseOptimal = (data.optimal_km !== null && data.optimal_km !== undefined) ? data.optimal_km : 0;
+                markers.push({ value: baseOptimal + data.falloff_km, color: '#0f4d8c', label: 'falloff' });
+            }
+
+            if (dpsChart) {
+                dpsChart.destroy();
+            }
+
+            dpsChart = new Chart(chartCtx, {
+                type: 'line',
+                data: {
+                    labels: distances,
+                    datasets: [
+                        {
+                            label: 'Applied DPS',
+                            data: applied,
+                            borderColor: '#1170d6',
+                            borderWidth: 2.5,
+                            fill: false,
+                            tension: 0.2,
+                        },
+                        {
+                            label: 'Raw DPS',
+                            data: rawLine,
+                            borderColor: '#8f96a8',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Distance (km)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'DPS' },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        rangeMarkers: { markers }
+                    }
+                }
+            });
+        }
+
+        function renderSummary(data) {
+            const summary = data.summary || {};
+            const raw = summary.raw_dps ?? data.raw_dps ?? 0;
+            const applied = summary.applied_dps ?? ((data.applied_dps || []).slice(-1)[0] ?? 0);
+            const appPct = summary.application_pct ?? (raw > 0 ? (applied / raw) * 100 : 0);
+
+            document.getElementById('kpi-raw').textContent = formatNum(raw, 1);
+            document.getElementById('kpi-applied').textContent = formatNum(applied, 1);
+            document.getElementById('kpi-app').textContent = formatNum(appPct, 1) + '%';
+            document.getElementById('kpi-volley').textContent = summary.volley !== undefined ? formatNum(summary.volley, 1) : '-';
+            document.getElementById('kpi-weapon').textContent = summary.weapon_type || '-';
+        }
+
+        async function calculate() {
+            errorText.textContent = '';
+            statusText.textContent = 'Calculating...';
+            calculateBtn.disabled = true;
+
+            try {
+                const payload = {
+                    eft_text: eftInput.value,
+                    skills: window.characterSkills || [],
+                    target: {
+                        sig_radius: parseFloat(document.getElementById('sig').value),
+                        velocity: parseFloat(document.getElementById('speed').value),
+                        angle: parseFloat(document.getElementById('angle').value) || 90,
+                        distance: (parseFloat(document.getElementById('distance').value) || 0) * 1000,
+                    },
+                    distance_range: [0, 200000],
+                    steps: 150,
+                };
+
+                const res = await fetch('/volley/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || data.error || 'Calculation failed.');
+                }
+
+                renderGraph(data);
+                renderSummary(data);
+                statusText.textContent = 'Done';
+            } catch (err) {
+                errorText.textContent = err.message || 'Unexpected error.';
+                statusText.textContent = '';
+            } finally {
+                calculateBtn.disabled = false;
+            }
+        }
+
+        targetPreset.addEventListener('change', applyPreset);
+        savedFitting.addEventListener('change', applyFittingTemplate);
+        calculateBtn.addEventListener('click', calculate);
+        applyPreset();
+        applyFittingTemplate();
+    })();
+</script>

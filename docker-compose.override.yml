@@ -1,0 +1,21 @@
+services:
+  volley-engine:
+    build: ./engine
+    restart: unless-stopped
+    networks:
+      - seat-internal
+    environment:
+      - SDE_PATH=/data/sde.db
+    volumes:
+      - volley-sde:/data
+
+  seat-web:
+    environment:
+      VOLLEY_ENGINE_URL: http://volley-engine:8000
+
+volumes:
+  volley-sde:
+
+networks:
+  seat-internal:
+    external: true

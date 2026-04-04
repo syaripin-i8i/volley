@@ -1,6 +1,6 @@
 {
     "name": "volley/seat-volley",
-    "description": "EVE Online damage calculator plugin for SeAT 5.x",
+    "description": "EVE Online damage calculator for SeAT",
     "type": "seat-plugin",
     "license": "MIT",
     "require": {
@@ -15,6 +15,11 @@
     "extra": {
         "seat": {
             "version": "^5.0"
+        },
+        "laravel": {
+            "providers": [
+                "Volley\\SeatVolley\\VolleyServiceProvider"
+            ]
         }
     }
 }
