@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+
+# SDE data (large binary, downloaded at runtime)
+engine/data/
+*.sqlite
+*.sqlite.bz2
+
+# Composer
+seat-plugin/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docker
+*.log
