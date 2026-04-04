@@ -1,9 +1,9 @@
 {
-    "name": "volley/seat-volley",
+    "name": "syaripin-i8i/seat-volley",
     "description": "EVE Online damage calculator for SeAT",
     "type": "seat-plugin",
     "license": "MIT",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "require": {
         "php": "^8.1",
         "eveseat/eveapi": "^5.0"
