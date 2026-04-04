@@ -9,16 +9,19 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class VolleyController extends Controller
 {
     public function index(Request $request): View
     {
-        $characterId = $request->query('character_id');
+        $characters = $this->getAvailableCharacters();
+        $selectedCharacterId = $request->query('character_id');
+        $characterId = $this->resolveSelectedCharacterId($selectedCharacterId, $characters);
         $skills = collect();
 
-        if ($characterId) {
+        if ($characterId !== null) {
             $skills = $this->fetchCharacterSkills((int) $characterId)
                 ->map(fn ($skill): array => [
                     'type_id' => (int) ($skill->skill_id ?? $skill->type_id ?? 0),
@@ -30,6 +33,7 @@ class VolleyController extends Controller
 
         return view('volley::volley.index', [
             'character_id' => $characterId,
+            'characters' => $characters->values(),
             'skills' => $skills,
         ]);
     }
@@ -85,5 +89,58 @@ class VolleyController extends Controller
         }
 
         return collect();
+    }
+
+    private function getAvailableCharacters(): Collection
+    {
+        $user = Auth::user();
+        if (! $user) {
+            return collect();
+        }
+
+        $characters = collect();
+
+        if (method_exists($user, 'characters')) {
+            $characters = $user->characters()->get();
+        } elseif (method_exists($user, 'all_characters')) {
+            $characters = $user->all_characters();
+        }
+
+        $mainCharacterId = (int) ($user->main_character_id ?? 0);
+
+        return $characters
+            ->map(function ($character) use ($mainCharacterId): array {
+                $characterId = (int) ($character->character_id ?? 0);
+                $name = trim((string) ($character->name ?? $character->character_name ?? ''));
+
+                return [
+                    'character_id' => $characterId,
+                    'name' => $name !== '' ? $name : (string) $characterId,
+                    'is_main' => $mainCharacterId > 0 && $mainCharacterId === $characterId,
+                ];
+            })
+            ->filter(fn (array $character): bool => $character['character_id'] > 0)
+            ->unique('character_id')
+            ->sortBy([
+                fn (array $character): int => $character['is_main'] ? 0 : 1,
+                fn (array $character): string => strtolower($character['name']),
+            ])
+            ->values();
+    }
+
+    private function resolveSelectedCharacterId(mixed $selectedCharacterId, Collection $characters): ?int
+    {
+        if ($selectedCharacterId === null || $selectedCharacterId === '') {
+            return null;
+        }
+
+        $characterId = (int) $selectedCharacterId;
+        if ($characterId <= 0) {
+            return null;
+        }
+
+        $allowedIds = $characters->pluck('character_id')->all();
+
+        return in_array($characterId, $allowedIds, true) ? $characterId : null;
     }
 }

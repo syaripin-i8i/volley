@@ -1,6 +1,8 @@
 @php
     $skillsJson = json_encode($skills ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
     $csrfToken = csrf_token();
+    $characterOptions = collect($characters ?? []);
+    $selectedCharacter = $characterOptions->firstWhere('character_id', (int) ($character_id ?? 0));
 @endphp
 
 <style>
@@ -45,6 +47,10 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 14px;
+    }
+
+    .volley-toolbar {
+        margin-bottom: 14px;
     }
 
     .volley-panel {
@@ -186,8 +192,38 @@
 </style>
 
 <div class="volley-shell">
-    <h3 class="volley-title">Character {{ $character_id }} Damage Calculator</h3>
-    <p class="volley-subtitle">EFT フィットとターゲット条件を入力して、距離ごとの適用DPSを可視化します。</p>
+    <h3 class="volley-title">Damage Calculator</h3>
+    <p class="volley-subtitle">
+        @if ($selectedCharacter)
+            現在は <strong>{{ $selectedCharacter['name'] }}</strong> のスキルを適用して計算します。
+        @elseif ($characterOptions->isNotEmpty())
+            キャラクターを選ぶと、そのキャラクターの SeAT 同期済みスキルを適用して計算します。
+        @else
+            利用可能なキャラクターが見つからないため、現在はスキル補正なしで計算します。
+        @endif
+    </p>
+
+    <div class="volley-panel volley-toolbar">
+        <h4>スキル適用キャラクター</h4>
+        <label class="volley-label" for="character-select">Character</label>
+        <select id="character-select" class="volley-select">
+            <option value="">No skill profile</option>
+            @foreach ($characterOptions as $character)
+                <option value="{{ $character['character_id'] }}" @selected((int) ($character_id ?? 0) === (int) $character['character_id'])>
+                    {{ $character['name'] }}@if($character['is_main']) (Main) @endif
+                </option>
+            @endforeach
+        </select>
+        <div class="volley-hint">
+            @if ($selectedCharacter)
+                {{ $selectedCharacter['name'] }} のスキルを engine へ送信します。
+            @elseif ($characterOptions->isNotEmpty())
+                未選択時はスキル補正なしで計算します。複数キャラクターを使い分ける場合はここで切り替えてください。
+            @else
+                SeAT 上でこのユーザーに紐づくキャラクターが見つかりませんでした。
+            @endif
+        </div>
+    </div>
 
     <div class="volley-grid">
         <div class="volley-panel">
@@ -286,6 +322,7 @@
 
         const csrfToken = window.volleyCsrfToken;
         const targetPreset = document.getElementById('target-preset');
+        const characterSelect = document.getElementById('character-select');
         const savedFitting = document.getElementById('saved-fitting');
         const eftInput = document.getElementById('eft-input');
         const calculateBtn = document.getElementById('calculate-btn');
@@ -338,6 +375,17 @@ Small Projectile Collision Accelerator II
             const key = savedFitting.value;
             if (!key || !sampleFittings[key]) return;
             eftInput.value = sampleFittings[key];
+        }
+
+        function applyCharacterSelection() {
+            const url = new URL(window.location.href);
+            const selected = characterSelect.value;
+            if (selected) {
+                url.searchParams.set('character_id', selected);
+            } else {
+                url.searchParams.delete('character_id');
+            }
+            window.location.assign(url.toString());
         }
 
         function formatNum(value, digits = 2) {
@@ -528,6 +576,7 @@ Small Projectile Collision Accelerator II
         }
 
         targetPreset.addEventListener('change', applyPreset);
+        characterSelect.addEventListener('change', applyCharacterSelection);
         savedFitting.addEventListener('change', applyFittingTemplate);
         calculateBtn.addEventListener('click', calculate);
 
