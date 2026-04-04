@@ -12,6 +12,9 @@ class VolleyServiceProvider extends AbstractSeatPlugin
     {
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'volley');
+        $this->publishes([
+            __DIR__ . '/../resources/assets' => public_path('vendor/seat-volley'),
+        ], 'public');
     }
 
     public function register(): void

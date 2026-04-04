@@ -254,7 +254,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="{{ asset('vendor/seat-volley/js/chart.umd.min.js') }}"></script>
 <script>
     window.characterSkills = {!! $skillsJson !!};
     window.volleyCsrfToken = "{{ $csrfToken }}";
@@ -481,3 +481,4 @@ Small Projectile Collision Accelerator II
         applyFittingTemplate();
     })();
 </script>
+
