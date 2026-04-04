@@ -132,6 +132,12 @@
         margin-top: 14px;
     }
 
+    .volley-chart-note {
+        margin-top: 8px;
+        color: var(--volley-muted);
+        font-size: 12px;
+    }
+
     .volley-chart-frame {
         position: relative;
         height: 300px;
@@ -283,6 +289,9 @@
         <div id="dps-chart-frame" class="volley-chart-frame">
             <canvas id="dps-chart" class="volley-chart-canvas"></canvas>
         </div>
+        <div class="volley-chart-note" id="chart-note">
+            グラフは現在の Sig / Speed / Angle 条件で 0-200km を走査します。Distance はサマリーと選択距離マーカーに反映されます。
+        </div>
     </div>
 
     <div class="volley-summary">
@@ -328,6 +337,7 @@
         const calculateBtn = document.getElementById('calculate-btn');
         const statusText = document.getElementById('status-text');
         const errorText = document.getElementById('error-text');
+        const chartNote = document.getElementById('chart-note');
         const chartFrame = document.getElementById('dps-chart-frame');
         const chartCanvas = document.getElementById('dps-chart');
         const chartCtx = chartCanvas.getContext('2d');
@@ -393,6 +403,21 @@ Small Projectile Collision Accelerator II
             return Number(value).toFixed(digits);
         }
 
+        function getCurrentTargetSnapshot() {
+            return {
+                sigRadius: parseFloat(document.getElementById('sig').value),
+                velocity: parseFloat(document.getElementById('speed').value),
+                angle: parseFloat(document.getElementById('angle').value) || 90,
+                distanceKm: parseFloat(document.getElementById('distance').value) || 0,
+            };
+        }
+
+        function renderCalculationStatus() {
+            const now = new Date();
+            const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            statusText.textContent = `Updated ${timeLabel}`;
+        }
+
         const markerPlugin = {
             id: 'rangeMarkers',
             afterDraw(chart, args, options) {
@@ -451,11 +476,16 @@ Small Projectile Collision Accelerator II
             dpsChart.resize(getChartWidth(), chartHeight);
         }
 
-        function renderGraph(data) {
+        function renderGraph(data, snapshot) {
             const distances = data.distances || [];
             const applied = data.applied_dps || [];
             const rawValue = (data.summary && data.summary.raw_dps) || data.raw_dps || 0;
             const rawLine = distances.map(() => rawValue);
+            const selectedDistanceKm = snapshot.distanceKm;
+            const selectedAppliedDps = (data.summary && data.summary.applied_dps !== undefined)
+                ? data.summary.applied_dps
+                : null;
+            const selectedPointSeries = distances.map(() => null);
 
             const markers = [];
             if (data.optimal_km !== null && data.optimal_km !== undefined) {
@@ -464,6 +494,21 @@ Small Projectile Collision Accelerator II
             if (data.falloff_km !== null && data.falloff_km !== undefined) {
                 const baseOptimal = (data.optimal_km !== null && data.optimal_km !== undefined) ? data.optimal_km : 0;
                 markers.push({ value: baseOptimal + data.falloff_km, color: '#0f4d8c', label: 'falloff' });
+            }
+            if (Number.isFinite(selectedDistanceKm)) {
+                markers.push({ value: selectedDistanceKm, color: '#a85c00', label: 'selected' });
+                if (selectedAppliedDps !== null && distances.length > 0) {
+                    let closestIndex = 0;
+                    let closestDelta = Math.abs(distances[0] - selectedDistanceKm);
+                    for (let i = 1; i < distances.length; i += 1) {
+                        const delta = Math.abs(distances[i] - selectedDistanceKm);
+                        if (delta < closestDelta) {
+                            closestIndex = i;
+                            closestDelta = delta;
+                        }
+                    }
+                    selectedPointSeries[closestIndex] = selectedAppliedDps;
+                }
             }
 
             if (dpsChart) {
@@ -493,6 +538,15 @@ Small Projectile Collision Accelerator II
                             fill: false,
                             pointRadius: 0,
                             tension: 0,
+                        },
+                        {
+                            label: 'Selected Distance',
+                            data: selectedPointSeries,
+                            borderColor: '#a85c00',
+                            backgroundColor: '#a85c00',
+                            showLine: false,
+                            pointRadius: 5,
+                            pointHoverRadius: 6,
                         }
                     ]
                 },
@@ -537,14 +591,15 @@ Small Projectile Collision Accelerator II
             calculateBtn.disabled = true;
 
             try {
+                const targetSnapshot = getCurrentTargetSnapshot();
                 const payload = {
                     eft_text: eftInput.value,
                     skills: window.characterSkills || [],
                     target: {
-                        sig_radius: parseFloat(document.getElementById('sig').value),
-                        velocity: parseFloat(document.getElementById('speed').value),
-                        angle: parseFloat(document.getElementById('angle').value) || 90,
-                        distance: (parseFloat(document.getElementById('distance').value) || 0) * 1000,
+                        sig_radius: targetSnapshot.sigRadius,
+                        velocity: targetSnapshot.velocity,
+                        angle: targetSnapshot.angle,
+                        distance: targetSnapshot.distanceKm * 1000,
                     },
                     distance_range: [0, 200000],
                     steps: 150,
@@ -552,6 +607,7 @@ Small Projectile Collision Accelerator II
 
                 const res = await fetch('/volley/calculate', {
                     method: 'POST',
+                    cache: 'no-store',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': csrfToken,
@@ -564,9 +620,10 @@ Small Projectile Collision Accelerator II
                     throw new Error(data.message || data.error || 'Calculation failed.');
                 }
 
-                renderGraph(data);
+                renderGraph(data, targetSnapshot);
                 renderSummary(data);
-                statusText.textContent = 'Done';
+                renderCalculationStatus();
+                chartNote.textContent = `現在の条件: Sig ${formatNum(targetSnapshot.sigRadius, 0)} m / Speed ${formatNum(targetSnapshot.velocity, 0)} m/s / Angle ${formatNum(targetSnapshot.angle, 0)}°。グラフはこの条件で 0-200km を走査し、selected マーカーが Distance ${formatNum(targetSnapshot.distanceKm, 1)} km を示します。`;
             } catch (err) {
                 errorText.textContent = err.message || 'Unexpected error.';
                 statusText.textContent = '';
