@@ -227,7 +227,9 @@
 
     <div class="volley-panel volley-chart-panel">
         <h4>DPS vs Distance</h4>
-        <canvas id="dps-chart" height="130"></canvas>
+        <div style="position: relative; height: 300px;">
+            <canvas id="dps-chart"></canvas>
+        </div>
     </div>
 
     <div class="volley-summary">
