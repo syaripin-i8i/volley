@@ -104,6 +104,7 @@
         display: flex;
         gap: 8px;
         align-items: center;
+        flex-wrap: wrap;
     }
 
     .volley-btn {
@@ -136,6 +137,7 @@
         margin-top: 8px;
         color: var(--volley-muted);
         font-size: 12px;
+        line-height: 1.5;
     }
 
     .volley-chart-frame {
@@ -187,12 +189,44 @@
         margin-top: 6px;
     }
 
+    #status-text {
+        min-height: 18px;
+    }
+
     @media (max-width: 900px) {
+        .volley-shell {
+            padding: 14px;
+        }
         .volley-grid {
             grid-template-columns: 1fr;
         }
         .volley-target-grid {
             grid-template-columns: 1fr;
+        }
+        .volley-panel {
+            padding: 12px;
+        }
+        .volley-actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .volley-btn {
+            width: 100%;
+        }
+        .volley-summary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .volley-kpi .k-value {
+            font-size: 18px;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .volley-title {
+            font-size: 22px;
+        }
+        .volley-summary {
+            grid-template-columns: 1fr 1fr;
         }
     }
 </style>
@@ -341,7 +375,8 @@
         const chartFrame = document.getElementById('dps-chart-frame');
         const chartCanvas = document.getElementById('dps-chart');
         const chartCtx = chartCanvas.getContext('2d');
-        const chartHeight = 300;
+        const desktopChartHeight = 300;
+        const mobileChartHeight = 240;
         let resizeFrameHandle = null;
 
         const presets = {
@@ -403,6 +438,20 @@ Small Projectile Collision Accelerator II
             return Number(value).toFixed(digits);
         }
 
+        function isCompactViewport() {
+            return window.innerWidth <= 900;
+        }
+
+        function getChartHeight() {
+            return isCompactViewport() ? mobileChartHeight : desktopChartHeight;
+        }
+
+        function formatDistanceLabel(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return '';
+            return numeric >= 100 ? numeric.toFixed(0) : numeric.toFixed(1);
+        }
+
         function getCurrentTargetSnapshot() {
             return {
                 sigRadius: parseFloat(document.getElementById('sig').value),
@@ -422,29 +471,53 @@ Small Projectile Collision Accelerator II
             id: 'rangeMarkers',
             afterDraw(chart, args, options) {
                 const markers = options.markers || [];
+                const bands = options.bands || [];
                 const x = chart.scales.x;
                 const y = chart.scales.y;
                 if (!x || !y) return;
 
                 const ctx = chart.ctx;
                 ctx.save();
+                bands.forEach((band) => {
+                    if (band.from === null || band.to === null || band.from === undefined || band.to === undefined) {
+                        return;
+                    }
+                    const start = x.getPixelForValue(band.from);
+                    const end = x.getPixelForValue(band.to);
+                    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+
+                    ctx.fillStyle = band.color || 'rgba(15, 77, 140, 0.06)';
+                    ctx.fillRect(Math.min(start, end), y.top, Math.abs(end - start), y.bottom - y.top);
+                });
+
                 markers.forEach((marker) => {
                     if (marker.value === null || marker.value === undefined) return;
                     const px = x.getPixelForValue(marker.value);
                     if (!Number.isFinite(px)) return;
 
                     ctx.strokeStyle = marker.color;
-                    ctx.lineWidth = 1;
-                    ctx.setLineDash([6, 4]);
+                    ctx.lineWidth = marker.width || 1.5;
+                    ctx.setLineDash(marker.dash || [6, 4]);
                     ctx.beginPath();
                     ctx.moveTo(px, y.top);
                     ctx.lineTo(px, y.bottom);
                     ctx.stroke();
                     ctx.setLineDash([]);
 
-                    ctx.fillStyle = marker.color;
+                    const label = marker.label || '';
                     ctx.font = '11px "IBM Plex Sans JP", sans-serif';
-                    ctx.fillText(marker.label, px + 4, y.top + 12);
+                    const textMetrics = ctx.measureText(label);
+                    const badgePaddingX = 6;
+                    const badgeWidth = textMetrics.width + badgePaddingX * 2;
+                    const badgeHeight = 18;
+                    const badgeX = Math.min(Math.max(px + 6, x.left + 4), x.right - badgeWidth - 4);
+                    const badgeY = y.top + 6;
+
+                    ctx.fillStyle = marker.fillColor || marker.color;
+                    ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
+
+                    ctx.fillStyle = marker.textColor || '#ffffff';
+                    ctx.fillText(label, badgeX + badgePaddingX, badgeY + 12);
                 });
                 ctx.restore();
             }
@@ -464,6 +537,7 @@ Small Projectile Collision Accelerator II
         }
 
         function syncChartFrameSize() {
+            const chartHeight = getChartHeight();
             chartFrame.style.height = chartHeight + 'px';
             chartFrame.style.minHeight = chartHeight + 'px';
             chartFrame.style.maxHeight = chartHeight + 'px';
@@ -473,7 +547,7 @@ Small Projectile Collision Accelerator II
         function resizeChartToFrame() {
             if (!dpsChart) return;
             syncChartFrameSize();
-            dpsChart.resize(getChartWidth(), chartHeight);
+            dpsChart.resize(getChartWidth(), getChartHeight());
         }
 
         function renderGraph(data, snapshot) {
@@ -486,17 +560,43 @@ Small Projectile Collision Accelerator II
                 ? data.summary.applied_dps
                 : null;
             const selectedPointSeries = distances.map(() => null);
+            const xTickStride = Math.max(1, Math.ceil(distances.length / (isCompactViewport() ? 6 : 11)));
 
             const markers = [];
+            const bands = [];
             if (data.optimal_km !== null && data.optimal_km !== undefined) {
-                markers.push({ value: data.optimal_km, color: '#177a56', label: 'optimal' });
+                markers.push({
+                    value: data.optimal_km,
+                    color: '#177a56',
+                    label: 'optimal',
+                    dash: [3, 4],
+                    width: 1.5,
+                });
             }
             if (data.falloff_km !== null && data.falloff_km !== undefined) {
                 const baseOptimal = (data.optimal_km !== null && data.optimal_km !== undefined) ? data.optimal_km : 0;
-                markers.push({ value: baseOptimal + data.falloff_km, color: '#0f4d8c', label: 'falloff' });
+                const falloffPosition = baseOptimal + data.falloff_km;
+                markers.push({
+                    value: falloffPosition,
+                    color: '#0f4d8c',
+                    label: 'falloff',
+                    dash: [6, 4],
+                    width: 1.5,
+                });
+                bands.push({
+                    from: baseOptimal,
+                    to: falloffPosition,
+                    color: 'rgba(15, 77, 140, 0.08)',
+                });
             }
             if (Number.isFinite(selectedDistanceKm)) {
-                markers.push({ value: selectedDistanceKm, color: '#a85c00', label: 'selected' });
+                markers.push({
+                    value: selectedDistanceKm,
+                    color: '#a85c00',
+                    label: 'selected',
+                    dash: [],
+                    width: 2,
+                });
                 if (selectedAppliedDps !== null && distances.length > 0) {
                     let closestIndex = 0;
                     let closestDelta = Math.abs(distances[0] - selectedDistanceKm);
@@ -528,6 +628,8 @@ Small Projectile Collision Accelerator II
                             borderWidth: 2.5,
                             fill: false,
                             tension: 0.2,
+                            pointRadius: isCompactViewport() ? 0 : 1.5,
+                            pointHoverRadius: 4,
                         },
                         {
                             label: 'Raw DPS',
@@ -554,18 +656,59 @@ Small Projectile Collision Accelerator II
                     animation: false,
                     responsive: false,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
                     scales: {
                         x: {
-                            title: { display: true, text: 'Distance (km)' }
+                            title: { display: true, text: 'Distance (km)' },
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: isCompactViewport() ? 42 : 0,
+                                minRotation: isCompactViewport() ? 42 : 0,
+                                callback(value, index) {
+                                    if (index % xTickStride !== 0 && index !== distances.length - 1) return '';
+                                    return formatDistanceLabel(this.getLabelForValue(value));
+                                },
+                            },
+                            grid: {
+                                color: 'rgba(26, 36, 51, 0.08)',
+                            },
                         },
                         y: {
                             title: { display: true, text: 'DPS' },
-                            beginAtZero: true
+                            beginAtZero: true,
+                            ticks: {
+                                callback(value) {
+                                    return formatNum(value, value >= 100 ? 0 : 1);
+                                },
+                            },
+                            grid: {
+                                color: 'rgba(26, 36, 51, 0.08)',
+                            },
                         }
                     },
                     plugins: {
-                        legend: { position: 'top' },
-                        rangeMarkers: { markers }
+                        legend: {
+                            position: isCompactViewport() ? 'bottom' : 'top',
+                            labels: {
+                                boxWidth: 14,
+                                usePointStyle: true,
+                            },
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title(items) {
+                                    if (!items.length) return '';
+                                    return `Distance ${formatDistanceLabel(items[0].label)} km`;
+                                },
+                                label(context) {
+                                    return `${context.dataset.label}: ${formatNum(context.parsed.y, 1)} DPS`;
+                                },
+                            },
+                        },
+                        rangeMarkers: { markers, bands }
                     }
                 }
             });
