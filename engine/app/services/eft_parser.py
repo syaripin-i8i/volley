@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import lru_cache
-from difflib import SequenceMatcher
 
 from app.schemas.calc import FitModule
 from app.services import sde
@@ -100,7 +98,6 @@ def _normalize_name(name: str) -> str:
     return " ".join(name.strip().split())
 
 
-@lru_cache(maxsize=8192)
 def type_name_to_id(name: str) -> int | None:
     normalized = _normalize_name(name)
     if not normalized:
@@ -108,91 +105,7 @@ def type_name_to_id(name: str) -> int | None:
     alias = ALIASES.get(normalized.lower())
     if alias:
         normalized = alias
-
-    with sde.get_connection() as conn:
-        exact = conn.execute(
-            """
-            SELECT typeID
-            FROM invTypes
-            WHERE typeName = ? COLLATE NOCASE
-              AND COALESCE(published, 1) = 1
-              AND LOWER(typeName) NOT LIKE '%blueprint%'
-            ORDER BY typeID
-            LIMIT 1
-            """,
-            (normalized,),
-        ).fetchone()
-        if exact is not None:
-            return int(exact["typeID"])
-
-        prefix = conn.execute(
-            """
-            SELECT typeID
-            FROM invTypes
-            WHERE typeName LIKE ? COLLATE NOCASE
-              AND COALESCE(published, 1) = 1
-              AND LOWER(typeName) NOT LIKE '%blueprint%'
-            ORDER BY LENGTH(typeName), typeID
-            LIMIT 1
-            """,
-            (f"{normalized}%",),
-        ).fetchone()
-        if prefix is not None:
-            return int(prefix["typeID"])
-
-        partial = conn.execute(
-            """
-            SELECT typeID
-            FROM invTypes
-            WHERE typeName LIKE ? COLLATE NOCASE
-              AND COALESCE(published, 1) = 1
-              AND LOWER(typeName) NOT LIKE '%blueprint%'
-            ORDER BY LENGTH(typeName), typeID
-            LIMIT 1
-            """,
-            (f"%{normalized}%",),
-        ).fetchone()
-        if partial is not None:
-            return int(partial["typeID"])
-
-        fuzzy = _fuzzy_type_match(conn, normalized)
-        if fuzzy is not None:
-            return fuzzy
-
-    return None
-
-
-def _fuzzy_type_match(conn, normalized: str) -> int | None:
-    words = [token for token in normalized.lower().split() if len(token) >= 3]
-    if not words:
-        return None
-    anchor = sorted(words, key=len, reverse=True)[0]
-    candidates = conn.execute(
-        """
-        SELECT typeID, typeName
-        FROM invTypes
-        WHERE typeName LIKE ? COLLATE NOCASE
-          AND COALESCE(published, 1) = 1
-          AND LOWER(typeName) NOT LIKE '%blueprint%'
-        LIMIT 200
-        """,
-        (f"%{anchor}%",),
-    ).fetchall()
-    if not candidates:
-        return None
-
-    def score(row) -> float:
-        candidate = str(row["typeName"]).lower()
-        overlap = sum(1 for token in words if token in candidate)
-        ratio = SequenceMatcher(None, normalized.lower(), candidate).ratio()
-        size_bonus = 0
-        for size in ("small", "medium", "large", "x-large", "capital"):
-            if size in words and size in candidate:
-                size_bonus += 1
-        return overlap * 10 + ratio * 5 + size_bonus * 3
-
-    best = max(candidates, key=score)
-    return int(best["typeID"])
+    return sde.type_name_to_id(normalized)
 
 
 def resolve_fit(parsed: FitParseResult) -> tuple[int, list[FitModule]]:

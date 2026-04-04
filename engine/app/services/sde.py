@@ -199,6 +199,86 @@ def preload_weapon_groups() -> set[int]:
     return set(WEAPON_GROUP_IDS)
 
 
+@lru_cache(maxsize=8192)
+def type_name_to_id(name: str) -> int | None:
+    """Resolve an EVE type name to its typeID using MariaDB. Returns None if not found."""
+    from difflib import SequenceMatcher
+
+    normalized = " ".join(name.strip().split())
+    if not normalized:
+        return None
+
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            # 1. exact match
+            cur.execute(
+                "SELECT typeID FROM invTypes "
+                "WHERE typeName = %s AND COALESCE(published, 1) = 1 "
+                "AND LOWER(typeName) NOT LIKE '%%blueprint%%' "
+                "ORDER BY typeID LIMIT 1",
+                (normalized,),
+            )
+            row = cur.fetchone()
+            if row:
+                return int(row["typeID"])
+
+            # 2. prefix match
+            cur.execute(
+                "SELECT typeID FROM invTypes "
+                "WHERE typeName LIKE %s AND COALESCE(published, 1) = 1 "
+                "AND LOWER(typeName) NOT LIKE '%%blueprint%%' "
+                "ORDER BY LENGTH(typeName), typeID LIMIT 1",
+                (f"{normalized}%",),
+            )
+            row = cur.fetchone()
+            if row:
+                return int(row["typeID"])
+
+            # 3. partial match
+            cur.execute(
+                "SELECT typeID FROM invTypes "
+                "WHERE typeName LIKE %s AND COALESCE(published, 1) = 1 "
+                "AND LOWER(typeName) NOT LIKE '%%blueprint%%' "
+                "ORDER BY LENGTH(typeName), typeID LIMIT 1",
+                (f"%{normalized}%",),
+            )
+            row = cur.fetchone()
+            if row:
+                return int(row["typeID"])
+
+            # 4. fuzzy match
+            words = [t for t in normalized.lower().split() if len(t) >= 3]
+            if not words:
+                return None
+            anchor = sorted(words, key=len, reverse=True)[0]
+            cur.execute(
+                "SELECT typeID, typeName FROM invTypes "
+                "WHERE typeName LIKE %s AND COALESCE(published, 1) = 1 "
+                "AND LOWER(typeName) NOT LIKE '%%blueprint%%' LIMIT 200",
+                (f"%{anchor}%",),
+            )
+            candidates = cur.fetchall()
+    finally:
+        conn.close()
+
+    if not candidates:
+        return None
+
+    def score(r: dict) -> float:
+        candidate = str(r["typeName"]).lower()
+        overlap = sum(1 for token in words if token in candidate)
+        ratio = SequenceMatcher(None, normalized.lower(), candidate).ratio()
+        size_bonus = sum(
+            1 for size in ("small", "medium", "large", "x-large", "capital")
+            if size in words and size in candidate
+        )
+        return overlap * 10 + ratio * 5 + size_bonus * 3
+
+    best = max(candidates, key=score)
+    return int(best["typeID"])
+
+
 def clear_caches() -> None:
     _cached_type_dogma_attributes.cache_clear()
     _cached_type_effects.cache_clear()
@@ -206,3 +286,4 @@ def clear_caches() -> None:
     get_group_info.cache_clear()
     get_attribute_info.cache_clear()
     get_effect_info.cache_clear()
+    type_name_to_id.cache_clear()
