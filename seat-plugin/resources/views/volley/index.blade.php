@@ -1,8 +1,10 @@
 @php
     $skillsJson = json_encode($skills ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+    $endpointsJson = json_encode($endpoints ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
     $csrfToken = csrf_token();
     $characterOptions = collect($characters ?? []);
     $selectedCharacter = $characterOptions->firstWhere('character_id', (int) ($character_id ?? 0));
+    $seatHomeUrl = $seat_home_url ?? url('/');
 @endphp
 
 <style>
@@ -36,6 +38,29 @@
         font-family: "Space Grotesk", sans-serif;
         font-size: 26px;
         margin: 0;
+    }
+
+    .volley-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .volley-back-link {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--volley-border);
+        border-radius: 999px;
+        padding: 6px 12px;
+        color: var(--volley-accent-2);
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.88);
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 600;
+        font-size: 13px;
+        white-space: nowrap;
     }
 
     .volley-subtitle {
@@ -107,6 +132,17 @@
         flex-wrap: wrap;
     }
 
+    .volley-import-actions {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .volley-import-actions .volley-input {
+        flex: 1;
+    }
+
     .volley-btn {
         border: none;
         border-radius: 9px;
@@ -118,9 +154,98 @@
         cursor: pointer;
     }
 
+    .volley-btn-secondary {
+        background: linear-gradient(135deg, #355f9c, #4c7aba);
+    }
+
     .volley-btn:disabled {
         opacity: 0.6;
         cursor: wait;
+    }
+
+    .volley-fit-editor {
+        margin-top: 12px;
+        border-top: 1px dashed var(--volley-border);
+        padding-top: 10px;
+    }
+
+    .volley-fit-editor-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+    }
+
+    .volley-fit-editor-title {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .volley-fit-editor-meta {
+        color: var(--volley-muted);
+        font-size: 12px;
+    }
+
+    .volley-fit-warnings {
+        margin-bottom: 8px;
+        color: #8f4a00;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .volley-fit-modules {
+        display: grid;
+        gap: 8px;
+        max-height: 280px;
+        overflow: auto;
+        padding-right: 2px;
+    }
+
+    .volley-fit-module {
+        border: 1px solid var(--volley-border);
+        border-radius: 8px;
+        padding: 8px;
+        background: #f9fbff;
+    }
+
+    .volley-fit-module-main {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .volley-slot-chip {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        background: #0f4d8c;
+        border-radius: 999px;
+        padding: 2px 8px;
+    }
+
+    .volley-fit-module-name {
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .volley-fit-module-qty {
+        font-size: 12px;
+        color: var(--volley-muted);
+    }
+
+    .volley-fit-charge {
+        margin-top: 7px;
+    }
+
+    .volley-fit-charge-help {
+        margin-top: 4px;
+        color: var(--volley-muted);
+        font-size: 11px;
     }
 
     .volley-error {
@@ -210,6 +335,9 @@
             flex-direction: column;
             align-items: stretch;
         }
+        .volley-import-actions {
+            flex-direction: column;
+        }
         .volley-btn {
             width: 100%;
         }
@@ -218,6 +346,10 @@
         }
         .volley-kpi .k-value {
             font-size: 18px;
+        }
+        .volley-back-link {
+            width: 100%;
+            justify-content: center;
         }
     }
 
@@ -232,7 +364,10 @@
 </style>
 
 <div class="volley-shell">
-    <h3 class="volley-title">Damage Calculator</h3>
+    <div class="volley-header">
+        <h3 class="volley-title">Damage Calculator</h3>
+        <a class="volley-back-link" href="{{ $seatHomeUrl }}">SeAT Home へ戻る</a>
+    </div>
     <p class="volley-subtitle">
         @if ($selectedCharacter)
             現在は <strong>{{ $selectedCharacter['name'] }}</strong> のスキルを適用して計算します。
@@ -268,6 +403,13 @@
     <div class="volley-grid">
         <div class="volley-panel">
             <h4>フィット入力</h4>
+            <label class="volley-label" for="zkill-url">zKill URL Import</label>
+            <div class="volley-import-actions">
+                <input id="zkill-url" class="volley-input" type="url" placeholder="https://zkillboard.com/kill/134558843/">
+                <button id="import-zkill-btn" class="volley-btn volley-btn-secondary" type="button">Import</button>
+            </div>
+            <div class="volley-hint">canonical URL 例: https://zkillboard.com/kill/&lt;kill_id&gt;/</div>
+
             <label class="volley-label" for="saved-fitting">Saved Fittings</label>
             <select id="saved-fitting" class="volley-select">
                 <option value="">Custom</option>
@@ -276,6 +418,15 @@
 
             <label class="volley-label" for="eft-input">EFT テキスト</label>
             <textarea id="eft-input" class="volley-textarea" placeholder="[Rifter, My PvP Rifter]&#10;&#10;150mm Light AutoCannon II, Republic Fleet EMP S&#10;..."></textarea>
+
+            <div id="fit-editor" class="volley-fit-editor" hidden>
+                <div class="volley-fit-editor-head">
+                    <div class="volley-fit-editor-title">Charge / Script 差し替え</div>
+                    <div id="fit-editor-meta" class="volley-fit-editor-meta"></div>
+                </div>
+                <div id="fit-warnings" class="volley-fit-warnings"></div>
+                <div id="fit-modules" class="volley-fit-modules"></div>
+            </div>
         </div>
 
         <div class="volley-panel">
@@ -355,6 +506,7 @@
 <script src="{{ asset('vendor/seat-volley/js/chart.umd.min.js') }}"></script>
 <script>
     window.characterSkills = {!! $skillsJson !!};
+    window.volleyEndpoints = {!! $endpointsJson !!};
     window.volleyCsrfToken = "{{ $csrfToken }}";
 </script>
 <script>
@@ -364,10 +516,21 @@
         }
 
         const csrfToken = window.volleyCsrfToken;
+        const endpoints = window.volleyEndpoints || {};
+        const calculateUrl = endpoints.calculate || '/volley/calculate';
+        const resolveFitUrl = endpoints.resolve_fit || '/volley/fit/resolve';
+        const importZkillUrl = endpoints.import_zkill || '/volley/fit/import-zkill';
+
         const targetPreset = document.getElementById('target-preset');
         const characterSelect = document.getElementById('character-select');
         const savedFitting = document.getElementById('saved-fitting');
         const eftInput = document.getElementById('eft-input');
+        const zkillUrlInput = document.getElementById('zkill-url');
+        const importZkillBtn = document.getElementById('import-zkill-btn');
+        const fitEditor = document.getElementById('fit-editor');
+        const fitEditorMeta = document.getElementById('fit-editor-meta');
+        const fitWarnings = document.getElementById('fit-warnings');
+        const fitModules = document.getElementById('fit-modules');
         const calculateBtn = document.getElementById('calculate-btn');
         const statusText = document.getElementById('status-text');
         const errorText = document.getElementById('error-text');
@@ -378,6 +541,8 @@
         const desktopChartHeight = 300;
         const mobileChartHeight = 240;
         let resizeFrameHandle = null;
+        let activeFitState = null;
+        let fitStateDirty = true;
 
         const presets = {
             capsule: { sig: 30, speed: 0 },
@@ -420,6 +585,7 @@ Small Projectile Collision Accelerator II
             const key = savedFitting.value;
             if (!key || !sampleFittings[key]) return;
             eftInput.value = sampleFittings[key];
+            invalidateFitState();
         }
 
         function applyCharacterSelection() {
@@ -459,6 +625,220 @@ Small Projectile Collision Accelerator II
                 angle: parseFloat(document.getElementById('angle').value) || 90,
                 distanceKm: parseFloat(document.getElementById('distance').value) || 0,
             };
+        }
+
+        function slotLabel(slot) {
+            if (!slot) return 'SLOT';
+            return String(slot).toUpperCase();
+        }
+
+        function invalidateFitState() {
+            fitStateDirty = true;
+            activeFitState = null;
+            fitEditor.hidden = true;
+            fitEditorMeta.textContent = '';
+            fitWarnings.textContent = '';
+            fitModules.innerHTML = '';
+        }
+
+        function setFitState(state, options = {}) {
+            activeFitState = state;
+            fitStateDirty = false;
+
+            if (options.replaceEft && typeof state.eft_text === 'string' && state.eft_text.trim() !== '') {
+                eftInput.value = state.eft_text;
+            }
+            renderFitEditor(state);
+        }
+
+        function renderFitEditor(state) {
+            if (!state || !state.fit || !Array.isArray(state.modules) || state.modules.length === 0) {
+                fitEditor.hidden = true;
+                fitEditorMeta.textContent = '';
+                fitWarnings.textContent = '';
+                fitModules.innerHTML = '';
+                return;
+            }
+
+            fitEditor.hidden = false;
+            const labelParts = [];
+            if (state.source_label) labelParts.push(state.source_label);
+            labelParts.push(`${state.modules.length} modules`);
+            fitEditorMeta.textContent = labelParts.join(' / ');
+
+            if (Array.isArray(state.warnings) && state.warnings.length > 0) {
+                fitWarnings.textContent = state.warnings.join(' / ');
+            } else {
+                fitWarnings.textContent = '';
+            }
+
+            fitModules.innerHTML = '';
+            state.modules.forEach((module, index) => {
+                const row = document.createElement('div');
+                row.className = 'volley-fit-module';
+
+                const main = document.createElement('div');
+                main.className = 'volley-fit-module-main';
+
+                const slot = document.createElement('span');
+                slot.className = 'volley-slot-chip';
+                slot.textContent = slotLabel(module.slot);
+
+                const name = document.createElement('span');
+                name.className = 'volley-fit-module-name';
+                name.textContent = module.type_name || `type_id:${module.type_id}`;
+
+                const qty = document.createElement('span');
+                qty.className = 'volley-fit-module-qty';
+                qty.textContent = `x${module.quantity || 1}`;
+
+                main.appendChild(slot);
+                main.appendChild(name);
+                main.appendChild(qty);
+                row.appendChild(main);
+
+                const options = Array.isArray(module.charge_options) ? module.charge_options.slice() : [];
+                const currentChargeId = (module.charge_type_id === null || module.charge_type_id === undefined)
+                    ? null
+                    : Number(module.charge_type_id);
+                const hasCurrent = currentChargeId !== null && options.some((opt) => Number(opt.type_id) === currentChargeId);
+                if (currentChargeId !== null && !hasCurrent) {
+                    options.push({
+                        type_id: currentChargeId,
+                        type_name: module.charge_name || `type_id:${currentChargeId}`,
+                    });
+                }
+
+                const canEditCharge = options.length > 0 || currentChargeId !== null;
+                const chargeWrap = document.createElement('div');
+                chargeWrap.className = 'volley-fit-charge';
+
+                if (canEditCharge) {
+                    const select = document.createElement('select');
+                    select.className = 'volley-select';
+                    select.dataset.moduleIndex = String(index);
+
+                    const noneOption = document.createElement('option');
+                    noneOption.value = '';
+                    noneOption.textContent = '(None)';
+                    select.appendChild(noneOption);
+
+                    options
+                        .sort((a, b) => String(a.type_name || '').localeCompare(String(b.type_name || '')))
+                        .forEach((opt) => {
+                            const option = document.createElement('option');
+                            option.value = String(opt.type_id);
+                            option.textContent = opt.type_name || `type_id:${opt.type_id}`;
+                            select.appendChild(option);
+                        });
+
+                    select.value = currentChargeId === null ? '' : String(currentChargeId);
+                    select.addEventListener('change', () => {
+                        const selectedRaw = select.value;
+                        const selectedChargeId = selectedRaw === '' ? null : Number(selectedRaw);
+                        const selectedName = selectedRaw === ''
+                            ? null
+                            : (select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : null);
+                        updateModuleCharge(index, selectedChargeId, selectedName);
+                    });
+                    chargeWrap.appendChild(select);
+
+                    const help = document.createElement('div');
+                    help.className = 'volley-fit-charge-help';
+                    help.textContent = 'Charge / script を選ぶと計算に反映されます。';
+                    chargeWrap.appendChild(help);
+                } else {
+                    const help = document.createElement('div');
+                    help.className = 'volley-fit-charge-help';
+                    help.textContent = 'このモジュールは charge/script 編集対象ではありません。';
+                    chargeWrap.appendChild(help);
+                }
+
+                row.appendChild(chargeWrap);
+                fitModules.appendChild(row);
+            });
+        }
+
+        function updateModuleCharge(index, chargeTypeId, chargeName) {
+            if (!activeFitState || !activeFitState.fit || !Array.isArray(activeFitState.modules)) return;
+            const moduleState = activeFitState.modules[index];
+            const fitModule = Array.isArray(activeFitState.fit.modules) ? activeFitState.fit.modules[index] : null;
+            if (!moduleState || !fitModule) return;
+
+            moduleState.charge_type_id = chargeTypeId;
+            moduleState.charge_name = chargeTypeId === null ? null : (chargeName || moduleState.charge_name || null);
+            fitModule.charge_type_id = chargeTypeId;
+            fitStateDirty = false;
+        }
+
+        async function postJson(url, payload) {
+            const response = await fetch(url, {
+                method: 'POST',
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (err) {
+                data = null;
+            }
+
+            if (!response.ok) {
+                const errorMessage =
+                    (data && (data.message || data.detail || data.error)) ||
+                    `Request failed (${response.status}).`;
+                throw new Error(errorMessage);
+            }
+            return data;
+        }
+
+        async function resolveFitStateFromEft() {
+            const eftText = eftInput.value || '';
+            return postJson(resolveFitUrl, { eft_text: eftText });
+        }
+
+        async function ensureFitStateReady() {
+            if (!fitStateDirty && activeFitState && activeFitState.fit) {
+                return activeFitState;
+            }
+
+            const eftText = (eftInput.value || '').trim();
+            if (eftText === '') {
+                if (activeFitState && activeFitState.fit) {
+                    return activeFitState;
+                }
+                throw new Error('EFT text が空です。zKill import または EFT 貼り付けを先に実行してください。');
+            }
+
+            statusText.textContent = 'Resolving fit...';
+            const resolved = await resolveFitStateFromEft();
+            setFitState(resolved);
+            statusText.textContent = 'Fit ready';
+            return resolved;
+        }
+
+        async function importFromZkill() {
+            const rawUrl = (zkillUrlInput.value || '').trim();
+            if (rawUrl === '') {
+                throw new Error('zKill URL を入力してください。');
+            }
+            statusText.textContent = 'Importing zKill...';
+            importZkillBtn.disabled = true;
+
+            try {
+                const imported = await postJson(importZkillUrl, { url: rawUrl });
+                setFitState(imported, { replaceEft: true });
+                errorText.textContent = '';
+                statusText.textContent = 'zKill import completed.';
+            } finally {
+                importZkillBtn.disabled = false;
+            }
         }
 
         function renderCalculationStatus() {
@@ -732,11 +1112,13 @@ Small Projectile Collision Accelerator II
             errorText.textContent = '';
             statusText.textContent = 'Calculating...';
             calculateBtn.disabled = true;
+            importZkillBtn.disabled = true;
 
             try {
                 const targetSnapshot = getCurrentTargetSnapshot();
+                const fitState = await ensureFitStateReady();
                 const payload = {
-                    eft_text: eftInput.value,
+                    fit: fitState.fit,
                     skills: window.characterSkills || [],
                     target: {
                         sig_radius: targetSnapshot.sigRadius,
@@ -748,20 +1130,7 @@ Small Projectile Collision Accelerator II
                     steps: 150,
                 };
 
-                const res = await fetch('/volley/calculate', {
-                    method: 'POST',
-                    cache: 'no-store',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                    body: JSON.stringify(payload),
-                });
-
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.message || data.error || 'Calculation failed.');
-                }
+                const data = await postJson(calculateUrl, payload);
 
                 renderGraph(data, targetSnapshot);
                 renderSummary(data);
@@ -772,12 +1141,23 @@ Small Projectile Collision Accelerator II
                 statusText.textContent = '';
             } finally {
                 calculateBtn.disabled = false;
+                importZkillBtn.disabled = false;
             }
         }
 
         targetPreset.addEventListener('change', applyPreset);
         characterSelect.addEventListener('change', applyCharacterSelection);
         savedFitting.addEventListener('change', applyFittingTemplate);
+        eftInput.addEventListener('input', invalidateFitState);
+        importZkillBtn.addEventListener('click', async () => {
+            errorText.textContent = '';
+            try {
+                await importFromZkill();
+            } catch (err) {
+                errorText.textContent = err.message || 'Import failed.';
+                statusText.textContent = '';
+            }
+        });
         calculateBtn.addEventListener('click', calculate);
 
         const onWindowResize = () => {

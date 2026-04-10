@@ -4,10 +4,38 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.schemas.calc import DpsRequest, DpsResult, FitRequest, GraphRequest, GraphResult, Skill
-from app.services import damage, eft_parser, sde
+from app.schemas.calc import (
+    DpsRequest,
+    DpsResult,
+    FitRequest,
+    FitState,
+    GraphRequest,
+    GraphResult,
+    ImportZkillRequest,
+    ResolveEftRequest,
+    Skill,
+)
+from app.services import damage, eft_parser, fit_state, sde
 
 router = APIRouter(tags=["calc"])
+
+
+@router.post("/fit/resolve", response_model=FitState)
+async def resolve_fit(req: ResolveEftRequest) -> FitState:
+    try:
+        return fit_state.resolve_eft_to_fit_state(req.eft_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post("/fit/import-zkill", response_model=FitState)
+async def import_fit_from_zkill(req: ImportZkillRequest) -> FitState:
+    try:
+        return fit_state.import_zkill_to_fit_state(req.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
 @router.post("/calc/dps", response_model=DpsResult)

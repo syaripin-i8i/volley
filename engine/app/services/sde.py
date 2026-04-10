@@ -114,6 +114,34 @@ def get_group_info(group_id: int) -> dict[str, Any]:
     return row or {}
 
 
+@lru_cache(maxsize=4096)
+def _cached_group_types(group_id: int, limit: int) -> tuple[tuple[int, str], ...]:
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT typeID AS type_id, typeName AS type_name "
+                "FROM invTypes "
+                "WHERE groupID = %s AND COALESCE(published, 1) = 1 "
+                "AND LOWER(typeName) NOT LIKE '%%blueprint%%' "
+                "ORDER BY typeName ASC LIMIT %s",
+                (group_id, limit),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    return tuple((int(row["type_id"]), str(row["type_name"])) for row in rows)
+
+
+def get_group_types(group_id: int, limit: int = 200) -> list[dict[str, Any]]:
+    safe_limit = max(1, min(int(limit), 1000))
+    return [
+        {"type_id": type_id, "type_name": type_name}
+        for type_id, type_name in _cached_group_types(int(group_id), safe_limit)
+    ]
+
+
 @lru_cache(maxsize=8192)
 def get_attribute_info(attribute_id: int) -> dict[str, Any]:
     conn = _get_connection()
@@ -282,6 +310,7 @@ def type_name_to_id(name: str) -> int | None:
 def clear_caches() -> None:
     _cached_type_dogma_attributes.cache_clear()
     _cached_type_effects.cache_clear()
+    _cached_group_types.cache_clear()
     get_type_info.cache_clear()
     get_group_info.cache_clear()
     get_attribute_info.cache_clear()

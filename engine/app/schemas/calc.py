@@ -23,6 +23,38 @@ class FitRequest(BaseModel):
     skills: list[Skill] = Field(default_factory=list)
 
 
+class ChargeOption(BaseModel):
+    type_id: int
+    type_name: str
+
+
+class FitModuleState(BaseModel):
+    type_id: int
+    slot: Literal["high", "mid", "low", "rig", "drone"]
+    quantity: int = Field(default=1, ge=1)
+    type_name: str
+    charge_type_id: int | None = None
+    charge_name: str | None = None
+    charge_options: list[ChargeOption] = Field(default_factory=list)
+
+
+class FitState(BaseModel):
+    source: Literal["eft", "zkill", "fit"]
+    source_label: str | None = None
+    eft_text: str | None = None
+    fit: FitRequest
+    modules: list[FitModuleState] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ResolveEftRequest(BaseModel):
+    eft_text: str
+
+
+class ImportZkillRequest(BaseModel):
+    url: str
+
+
 class TargetProfile(BaseModel):
     sig_radius: float
     velocity: float

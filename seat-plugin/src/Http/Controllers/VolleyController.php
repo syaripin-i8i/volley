@@ -8,8 +8,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Client\Response;
 use Illuminate\View\View;
 
 class VolleyController extends Controller
@@ -35,6 +37,12 @@ class VolleyController extends Controller
             'character_id' => $characterId,
             'characters' => $characters->values(),
             'skills' => $skills,
+            'seat_home_url' => $this->resolveSeatHomeUrl(),
+            'endpoints' => [
+                'calculate' => route('volley.calculate'),
+                'resolve_fit' => route('volley.fit.resolve'),
+                'import_zkill' => route('volley.fit.import_zkill'),
+            ],
         ]);
     }
 
@@ -71,6 +79,30 @@ class VolleyController extends Controller
         }
 
         return response()->json($body, 200);
+    }
+
+    public function resolveFit(Request $request): JsonResponse
+    {
+        $eftText = (string) $request->input('eft_text', '');
+        if (trim($eftText) === '') {
+            return response()->json([
+                'error' => 'EFT text is empty.',
+            ], 422);
+        }
+
+        return $this->forwardEngineRequest('/fit/resolve', ['eft_text' => $eftText], 15);
+    }
+
+    public function importZkill(Request $request): JsonResponse
+    {
+        $url = trim((string) $request->input('url', ''));
+        if ($url === '') {
+            return response()->json([
+                'error' => 'zKill URL is empty.',
+            ], 422);
+        }
+
+        return $this->forwardEngineRequest('/fit/import-zkill', ['url' => $url], 25);
     }
 
     private function fetchCharacterSkills(int $characterId): Collection
@@ -142,5 +174,68 @@ class VolleyController extends Controller
         $allowedIds = $characters->pluck('character_id')->all();
 
         return in_array($characterId, $allowedIds, true) ? $characterId : null;
+    }
+
+    private function forwardEngineRequest(string $path, array $payload, int $timeoutSeconds = 20): JsonResponse
+    {
+        $engineUrl = rtrim((string) config('volley.engine_url', 'http://volley-engine:8000'), '/');
+
+        try {
+            $response = Http::timeout($timeoutSeconds)
+                ->acceptJson()
+                ->post($engineUrl . $path, $payload);
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'error' => 'Failed to reach volley-engine.',
+                'message' => $exception->getMessage(),
+            ], 502);
+        }
+
+        if (! $response->successful()) {
+            return $this->buildEngineErrorResponse($response);
+        }
+
+        return response()->json($response->json(), 200);
+    }
+
+    private function buildEngineErrorResponse(Response $response): JsonResponse
+    {
+        $body = $response->json();
+        $status = $response->status();
+        $detail = null;
+        if (is_array($body)) {
+            $detail = $body['detail'] ?? $body['message'] ?? $body['error'] ?? null;
+        }
+
+        return response()->json([
+            'error' => 'volley-engine returned an error.',
+            'status' => $status,
+            'message' => $detail ?: ($response->body() ?: 'Unexpected engine error.'),
+            'body' => $body ?: $response->body(),
+        ], $status >= 400 && $status < 600 ? $status : 502);
+    }
+
+    private function resolveSeatHomeUrl(): string
+    {
+        $routeCandidates = [
+            'web.home',
+            'dashboard.index',
+            'dashboard',
+            'home',
+        ];
+
+        foreach ($routeCandidates as $name) {
+            if (! Route::has($name)) {
+                continue;
+            }
+
+            try {
+                return route($name);
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return url('/');
     }
 }
