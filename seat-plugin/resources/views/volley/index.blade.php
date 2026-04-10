@@ -803,6 +803,42 @@ Small Projectile Collision Accelerator II
             return postJson(resolveFitUrl, { eft_text: eftText });
         }
 
+        function shouldUseLegacyCalculateFallback(err) {
+            const message = String((err && err.message) || '').toLowerCase();
+            return (
+                message.includes('not found') ||
+                message.includes('request failed (404)') ||
+                message.includes('405') ||
+                message.includes('method not allowed')
+            );
+        }
+
+        function buildCalculatePayload(targetSnapshot, fitState) {
+            const basePayload = {
+                skills: window.characterSkills || [],
+                target: {
+                    sig_radius: targetSnapshot.sigRadius,
+                    velocity: targetSnapshot.velocity,
+                    angle: targetSnapshot.angle,
+                    distance: targetSnapshot.distanceKm * 1000,
+                },
+                distance_range: [0, 200000],
+                steps: 150,
+            };
+
+            if (fitState && fitState.fit) {
+                return {
+                    ...basePayload,
+                    fit: fitState.fit,
+                };
+            }
+
+            return {
+                ...basePayload,
+                eft_text: eftInput.value,
+            };
+        }
+
         async function ensureFitStateReady() {
             if (!fitStateDirty && activeFitState && activeFitState.fit) {
                 return activeFitState;
@@ -1116,19 +1152,18 @@ Small Projectile Collision Accelerator II
 
             try {
                 const targetSnapshot = getCurrentTargetSnapshot();
-                const fitState = await ensureFitStateReady();
-                const payload = {
-                    fit: fitState.fit,
-                    skills: window.characterSkills || [],
-                    target: {
-                        sig_radius: targetSnapshot.sigRadius,
-                        velocity: targetSnapshot.velocity,
-                        angle: targetSnapshot.angle,
-                        distance: targetSnapshot.distanceKm * 1000,
-                    },
-                    distance_range: [0, 200000],
-                    steps: 150,
-                };
+                let fitState = null;
+
+                try {
+                    fitState = await ensureFitStateReady();
+                } catch (err) {
+                    if (!shouldUseLegacyCalculateFallback(err)) {
+                        throw err;
+                    }
+                    statusText.textContent = 'Using legacy EFT calculate mode...';
+                }
+
+                const payload = buildCalculatePayload(targetSnapshot, fitState);
 
                 const data = await postJson(calculateUrl, payload);
 
